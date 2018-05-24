@@ -1,12 +1,31 @@
-from collections import Counter
+from collections import Counter, OrderedDict
 import math
 import sqlite3
 import json
-import datetime
+from datetime import datetime, timedelta
+
+
+def save_to_base(cursor, article):
+
+    data = (article['text'], article['date'], article['post_id'])
+
+    if check_post_id(cursor, article['post_id']):
+        cursor.execute("INSERT INTO tf_articles (text, date, post_id) "
+                       "VALUES (?, ?, ?)", data)
+        print('Succesfully saved')
+
+
+def check_post_id(cursor, post_id):
+    """Check the existence of this article in base"""
+    cursor.execute("""SELECT * FROM tf_articles WHERE post_id=?""", (post_id, ))
+
+    if cursor.fetchone() is not None:
+        return False
+    return True
 
 
 def compute_tfidf(corpus):
-    """Принимает двумерный массив"""
+    """Corpus - matrix"""
     def compute_tf(text):
         """TF"""
         """Returns Counter object"""
@@ -26,7 +45,7 @@ def compute_tfidf(corpus):
         computed_tf = compute_tf(article)
         for word in computed_tf:
             tf_idf_dict[word] = computed_tf[word]*compute_idf(word, corpus)
-        articles_list.append(tf_idf_dict)
+        articles_list.append(OrderedDict(sorted(tf_idf_dict.items(), key=lambda t: t[1], reverse=True)))
 
     return articles_list
 
@@ -37,28 +56,31 @@ def main(DATETIME):
     cursor.execute("""SELECT * FROM t_articles WHERE date(date) > date(?) LIMIT 50""", (DATETIME, ))
 
     corpus = []
+    arr_article = []
 
     for row in cursor.fetchall():
         wrds = json.loads(row[1])
         if len(wrds) != 0:
+            article = {
+                'text': wrds,
+                'date': row[2],
+                'post_id': row[3]
+            }
+            arr_article.append(article)
             corpus.append(wrds)
 
     res = compute_tfidf(corpus)
 
-    res_dict = {}
-    for d in res:
-        res_dict.update(d)
+    for article, b in zip(arr_article, res):
+        article['text'] = json.dumps(b)
 
-    sort_list = sorted(res_dict.items(), key=lambda i: i[1], reverse=True)
+        save_to_base(cursor, article)
+        conn.commit()
 
-    del res_dict
-    del res
-    response = []
-    for j in range(6):
-        response.append(sort_list[j][0])
-    return json.dumps(response)
+    conn.close()
 
 
 if __name__ == '__main__':
-    DATE = "2018-05-11 12:45:49.659124"
-    main(DATE)
+    # TODAY = "2018-05-24 12:45:49.659124"  # test
+    TODAY = datetime.now() - timedelta(days=1)
+    main(TODAY)
