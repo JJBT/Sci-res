@@ -1,12 +1,13 @@
 import telebot
 from Constants import Token, Proxy
-import json
 from datetime import datetime, timedelta
-import analyze
+import content
+from nltk import WordNetLemmatizer
 
 
 bot = telebot.TeleBot(Token)
 telebot.apihelper.proxy = {'https': Proxy}
+wnl = WordNetLemmatizer()
 
 
 def log(message, answer):
@@ -28,23 +29,21 @@ def handle_start_help(message):
 @bot.message_handler(content_types=['text'])
 def handle_text(message):
     if message.text == '1 DAY':
-        answer = get_content(1)
+        answer = content.get_words(datetime.now() - timedelta(days=1))
         bot.send_message(message.from_user.id, answer)
         log(message, answer)
     elif message.text == '2 DAYS':
-        answer = get_content(2)
+        answer = content.get_words(datetime.now() - timedelta(days=2))
         bot.send_message(message.from_user.id, answer)
         log(message, answer)
     elif message.text == '3 DAYS':
-        answer = get_content(3)
+        answer = content.get_words(datetime.now() - timedelta(days=3))
         bot.send_message(message.from_user.id, answer)
         log(message, answer)
-
-
-def get_content(button):
-    d = datetime.now() - timedelta(days=button)
-    ans = json.loads(analyze.main(d))
-    return '\n'.join(ans)
+    else:
+        answer = content.get_article(datetime.now() - timedelta(days=1), wnl.lemmatize(message.text.lower()))
+        bot.send_message(message.from_user.id, answer)
+        log(message, answer)
 
 
 bot.polling(none_stop=True, interval=0)
